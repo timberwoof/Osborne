@@ -1,0 +1,151 @@
+PROGRAM TEK;
+{$I+}
+{$U+}
+const
+    xscale = 10.0;
+    yscale = 10.0;
+    xoff = 0;
+    yoff = 0;
+
+var
+    c : char;
+    i,z,x,y,y2,x2 : integer;
+    lastx,lasty : integer;
+    gridx,gridy : integer;
+
+
+{graphic plotting information is sent to the 4010 in a 4 byte sequence
+containing High and Low order Y and High and Low order X. Each byte
+contains the two tag bits plus 5 binary bits.}
+
+procedure godraw(x,y:integer);
+var
+    hi_y,lo_y,hi_x,lo_x : byte;
+begin
+    hi_y := (y shr 5)   or $20;
+    lo_y := (y and $1F) or $60;
+    hi_x := (x shr 5)   or $20;
+    lo_x := (x and $1F) or $40;
+    write (aux,chr(hi_y),chr(lo_y),chr(hi_x),chr(lo_x));
+    end; {draw}
+
+procedure gomove(x,y:integer);
+begin
+    write (aux,#29); {make next drawn vector dark}
+    godraw(x,y);
+    end; {move}
+
+procedure draw(x,y:integer);
+begin
+    gomove (lastx,lasty);
+    godraw (x,y);
+    lastx := x;
+    lasty := y;
+    end;
+
+procedure move(x,y:integer);
+begin
+    lastx := x;
+    lasty := y;
+    end;
+
+procedure point(x,y:integer);
+begin
+    lastx := x;
+    lasty := y;
+    gomove (x,y);
+    godraw (x,y);
+    end;
+
+procedure box(x1,y1,x2,y2 : integer);
+begin
+    move (x1,y1);
+    draw (x1,y2);
+    draw (x2,y2);
+    draw (x2,y1);
+    draw (x1,y1);
+    lastx := x1;
+    lasty := y1;
+    end;
+
+procedure circle (xc,yc,xr,yr : integer);
+{xc,yc is the center;
+ xr,yr is one point on the rim}
+var
+    x,y,i: integer;
+    radius,theta,deltax,deltay,inside  : real;
+begin
+    deltax := abs(xc - xr);
+    deltay := abs(yc - yr);
+    inside := deltax*deltax + deltay*deltay;
+    radius := sqrt(inside);
+    i := 0;
+    x := xc + round(radius);
+    y := yc;
+    move (x,y);
+    repeat
+        theta := (i * pi) / 180.0;
+        x := round (radius * cos(theta)) + xc;
+        y := round (radius * sin(theta)) + yc;
+        draw (x,y);
+        i := i + 10;
+        until i > 360;
+    lastx := xc;
+    lasty := yc;
+    end; {circle}
+
+procedure ellipse (x1,y1,x2,y2 : integer);
+{(x1,y1) and (x2,y2) are opposite corners of a rectangle containing the ellipse}
+var
+    xc,yc : integer;
+    x,y,i: integer;
+    rx,ry,theta : real;
+begin
+    xc := (x1 + x2) div 2;
+    yc := (y1 + y2) div 2;
+    rx := abs (x1 - xc);
+    ry := abs (y1 - yc);
+    i := 0;
+    x := xc + round(rx);
+    y := yc;
+    move (x,y);
+    repeat
+        theta := (i * pi) / 180.0;
+        x := round (rx * cos(theta)) + xc;
+        y := round (ry * sin(theta)) + yc;
+        draw (x,y);
+        i := i + 10;
+        until i > 360;
+    lastx := x1;
+    lasty := y1;
+    end; {ellipse}
+
+procedure pointabs (x,y:real);
+var
+    ix,iy : integer;
+begin
+    ix := round(x*xscale) + xoff;
+    iy := round(y*yscale) + yoff;
+    point(ix,iy);
+    end;
+
+begin
+    mem[$0003] := $94; {set iobyte}
+    repeat
+    write (aux,#27,#12);
+    delay (1000);
+    i := 1;
+    repeat
+        move (i,819);
+        draw (i,0);
+        move (1023,round(i*0.8));
+        draw (0,round(i*0.8));
+        i := i + 10;
+        until i > 1023;
+        read (aux,c);
+        c := chr(ord(c) and $7F);
+        writeln (c,' ',ord(c));
+        until c = ' ';
+    writeln(aux);
+
+    end. {tek}

@@ -1,0 +1,49 @@
+program dragon;
+{$A-}
+type
+    xypair : record
+                 x : integer;
+                 y : integer;
+                 end;
+var
+    sind, cosd : array[0..360] of real;
+    c : char;
+    x,y : integer;
+    lastx,lasty : integer;
+
+    i : array [1..1000] of xypair;
+    cellmax ; integer;
+
+    g : array [0..30,1..10] of integer;
+        { G(CELL,K) = the Kth cell in the division of CELL}
+
+    day, cell : integer;
+
+    {dragon DNA}
+    D : integer; {number of directions}
+    M : integer; {number of cell types}
+    L : integer; {maximum number of next-generation cells into which a cell divides}
+    I ; integer; {integpreter value}
+
+
+{$I tek.pas}
+
+procedure nextdragon (day,cell:integer);
+var
+    k : integer;
+begin
+    if day = 0
+    then draw(i[cell])
+    else for k := 1 to L do
+        dragon (day-1,G[cell,k]);
+    end; {dragon}
+
+
+
+
+begin {dragon}
+    settrigs;          {set up trigonometric tables}
+    mem[$0003] := $94; {set iobyte: con:=crt+kbd; aux=pun:+rdr:=ptp:+ptr:; lst:=lpt:}
+    clrtek;            {clear the 4010 screen}
+    breaktek;          {clear the 4010 communications}
+    end. {dragon}

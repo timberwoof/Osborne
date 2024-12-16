@@ -1,0 +1,3 @@
+  adj ,adj1: array[sxmin..sxmax,symin..symax] of byte {count live adj cells}
+  Hadj : array[axmin..axmax,1..8] of byte;
+  Vadj : array[aymin..aymax,1..8] of byte;

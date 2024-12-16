@@ -1,0 +1,52 @@
+procedure init; {initializes adjacency lookup tables and life matrix}
+var
+  i,j,k : integer;
+begin
+  for i := axmin to axmax do {horizontal adjacencies}
+    begin
+      Hadj[I,1]:=I-1;   {       } { positions }
+      Hadj[I,2]:=I;     { 1 2 3 } { relative to }
+      Hadj[I,3]:=I+1;   {       } { current }
+      Hadj[I,4]:=I+1;   { 8 * 4 } { location }
+      Hadj[I,5]:=I+1;   {       } { (*) }
+      Hadj[I,6]:=I;     { 7 6 5 }
+      Hadj[I,7]:=I-1;   {       }
+      Hadj[I,8]:=I-1;
+    end;
+  Hadj[axmax,3]:=axmin;
+  Hadj[axmax,4]:=axmin;
+  Hadj[axmax,5]:=axmin;
+  Hadj[axmin,1]:=axmax;
+  Hadj[axmin,8]:=axmax;
+  Hadj[axmin,7]:=axmax;
+
+  FOR J := aymin TO aymax do {vertical adjacencies}
+    begin
+      Vadj[J,1]:=J-1;
+      Vadj[J,2]:=J-1;
+      Vadj[J,3]:=J-1;
+      Vadj[J,4]:=J;
+      Vadj[J,5]:=J+1;
+      Vadj[J,6]:=J+1;
+      Vadj[J,7]:=J+1;
+      Vadj[J,8]:=J;
+    end;
+  Vadj[aymin,1]:=aymax;
+  Vadj[aymin,2]:=aymax;
+  Vadj[aymin,3]:=aymax;
+  Vadj[aymax,5]:=aymin;
+  Vadj[aymax,6]:=aymin;
+  Vadj[aymax,7]:=aymin;
+
+  FOR J := aymin TO aymax do
+    for i := axmin to axmax do
+      begin
+        a[i,j]:= 0;            {blank out life matrix}
+        adj[i,j] := 0;            {zero out count matrix}
+      end;
+  GEN := 1;                  {initialize vital statistics}
+  POP := 0;
+  BIRTHS := 0;
+  DEATHS := 0;
+  ClrScr;
+end;

@@ -1,0 +1,16 @@
+program echo;
+
+{$I+}
+{$U+}
+
+var
+   c : char;
+
+
+begin
+     mem[$0003] := $94;
+     repeat
+           read (aux,c);
+           write (c);
+           until (c = '~');
+    end.

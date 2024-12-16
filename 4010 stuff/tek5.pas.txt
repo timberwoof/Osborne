@@ -1,0 +1,231 @@
+PROGRAM TEK;
+{$I+}
+{$U+}
+{experiments in communication to the tektronix 4010}
+{crosshair i/o}
+{the CP/M commands
+   stat pun:=ptp:
+   stat rdr:=ptr:
+attach the Tektronix 4010 to Turbo Pascal device AUX:}
+
+{Osborne One physical devices are assigned so:
+keyboard & screen = 00
+serial port       = 01
+parallel port     = 10
+IEEE-488 port     = 11}
+
+{IOBYTE set for use of the Tektronix 4010:
+  bit:7 6 5 4 3 2 1 0
+value:1 0 0 1 0 1 0 0 = $94
+      LST:PUN:RDR:CON:}
+
+const
+    xscale = 142.0;
+    yscale = 142.0;
+    xoff = 512;
+    yoff = 390;
+
+var
+    sind, cosd : array[0..36] of real;
+    c : char;
+    a,i,z,x,y,x2,y2 : integer;
+    lastx,lasty : integer;
+    gridx,gridy : integer;
+
+procedure settrigs;
+{set up a table of trigonometric values for fast functions}
+var
+    i : integer;
+begin
+    writeln (aux,'Setting up trig tables; please wait.');
+    for i := 0 to 36 do begin
+        cosd[i] := cos(i * 0.17453293);
+        sind[i] := sin(i * 0.17453293);
+        end;
+    end;
+
+procedure beeptek;
+begin
+    write (aux,#7);
+    end;
+
+procedure breaktek;
+var
+    i : byte;
+begin
+    for i := 1 to 10 do
+        write (aux,#0);
+    end;
+
+procedure graphic;
+{places 4010 in graphics mode amd makes first drawn vector dark}
+begin
+    write (aux,#29);
+    end;
+
+procedure alpha;
+begin
+    writeln (aux);
+    end;
+
+procedure clrtek;
+begin
+    write (aux,#27,#12);
+    end;
+
+{graphic plotting information is sent to the 4010 in a 4 byte sequence
+containing High and Low order Y and High and Low order X. Each byte
+contains the two tag bits plus 5 binary bits.}
+
+procedure godraw(x,y:integer);
+var
+    hi_y,lo_y,hi_x,lo_x : byte;
+begin
+    hi_y := (y shr 5)   or $20;
+    lo_y := (y and $1F) or $60;
+    hi_x := (x shr 5)   or $20;
+    lo_x := (x and $1F) or $40;
+    write (aux,chr(hi_y),chr(lo_y),chr(hi_x),chr(lo_x));
+    end; {draw}
+
+procedure gomove(x,y:integer);
+begin
+    write (aux,#29); {make next drawn vector dark}
+    godraw(x,y);
+    end; {move}
+
+procedure draw(x,y:integer);
+begin
+    gomove (lastx,lasty);
+    godraw (x,y);
+    lastx := x;
+    lasty := y;
+    end;
+
+procedure move(x,y:integer);
+begin
+    lastx := x;
+    lasty := y;
+    end;
+
+procedure point(x,y:integer);
+begin
+    lastx := x;
+    lasty := y;
+    gomove (x,y);
+    godraw (x,y);
+    end;
+
+procedure box(x1,y1,x2,y2 : integer);
+begin
+    move (x1,y1);
+    draw (x1,y2);
+    draw (x2,y2);
+    draw (x2,y1);
+    draw (x1,y1);
+    lastx := x1;
+    lasty := y1;
+    end;
+
+procedure circle (xc,yc,xr,yr : integer);
+{xc,yc is the center;
+ xr,yr is one point on the rim}
+var
+    x,y,i,theta: integer;
+    radius,deltax,deltay,inside  : real;
+begin
+    deltax := abs(xc - xr);
+    deltay := abs(yc - yr);
+    inside := deltax*deltax + deltay*deltay;
+    radius := sqrt(inside);
+    i := 0;
+    x := xc + round(radius);
+    y := yc;
+    move (x,y);
+    theta := 0;
+    repeat
+        x := round (radius * cosd[theta]) + xc;
+        y := round (radius * sind[theta]) + yc;
+        draw (x,y);
+        theta := theta + 1;
+        until theta > 36;
+    lastx := xc;
+    lasty := yc;
+    end; {circle}
+
+procedure ellipse (x1,y1,x2,y2 : integer);
+{(x1,y1) and (x2,y2) are opposite corners of a rectangle containing the ellipse}
+var
+    xc,yc : integer;
+    x,y,i,theta: integer;
+    rx,ry : real;
+begin
+    xc := (x1 + x2) div 2;
+    yc := (y1 + y2) div 2;
+    rx := abs (x1 - xc);
+    ry := abs (y1 - yc);
+    i := 0;
+    x := xc + round(rx);
+    y := yc;
+    move (x,y);
+    theta := 0;
+    repeat
+        x := round (rx * cosd[theta]) + xc;
+        y := round (ry * sind[theta]) + yc;
+        draw (x,y);
+        theta := theta + 1;
+        until theta > 36;
+    lastx := x1;
+    lasty := y1;
+    end; {ellipse}
+
+procedure pointabs (x,y:real);
+var
+    ix,iy : integer;
+begin
+    ix := round(x*xscale) + xoff;
+    iy := round(y*yscale) + yoff;
+    point(ix,iy);
+    end;
+
+begin
+    mem[$0003] := $94; {set iobyte}
+    settrigs;
+    repeat
+        clrtek;
+        breaktek;
+        gridx := random(100);
+        gridy := random(100);
+        lastx := 0;
+        lasty := 0;
+        i := 1;
+        z := random(200);
+        for i := 1 to z do begin
+            x := random(gridx) * (1024 div gridx);
+            y := random(gridy) * (760 div gridy);
+            x2 := random(gridx) * (1024 div gridx);
+            y2 := random(gridy) * (760 div gridy);
+
+            a := random(4);
+            case a of
+                0 : begin;
+                    writeln ('line');
+                    move(x,y);
+                    draw(x2,y2);
+                    END;
+                1 : begin
+                    writeln ('ellipse');
+                    ellipse (x,y,x2,y2);
+                    end;
+                2 : begin
+                    writeln ('box');
+                    box (x,y,x2,y2);
+                    end;
+                3 : begin
+                    writeln ('circle');
+                    circle (x,y,x2,y2);
+                    end;
+                end;
+            end;
+        until c = ' ';
+    end. {tek}

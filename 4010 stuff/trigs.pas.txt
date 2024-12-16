@@ -1,0 +1,12 @@
+procedure settrigs;
+{set up a table of trigonometric values for fast functions}
+var
+    {sind, cosd : array[0..360] of real;}
+    i : integer;
+begin
+    writeln (aux,'Setting up trig tables; please wait.');
+    for i := 0 to 360 do begin
+        cosd[i] := cos(i * 0.017453293);
+        sind[i] := sin(i * 0.017453293);
+        end;
+    end;

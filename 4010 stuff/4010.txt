@@ -1,0 +1,33 @@
+Tektronix 4010 hardware notes.
+
+Cable that works reliably:
+
+Osborne RS232 connector:
+1 frame ground
+2 transmit data: input
+3 receive data: output
+4 request to send (high or nc enables)
+5 clear to send (held high)
+6 data set ready (held high)
+7 signal ground
+8 carrier detect (held high)
+
+Tektronix data board connector
+1 receive data "direct to CPU": input
+2 gnd
+3 held high
+4 gnd
+5 gnd
+6 held high
+7 transmit data "direct to modem": output
+
+The original cable had a special plug at the Tektronix end and no plug at the other.
+This had signal crossover problems at 1200 BAUD: data being sent from the Tektronix
+would arrive at the Osborne okay, but it would leak into the return wire and come back
+to the Tektronix as garbage.
+I made a new cable using two shielded wires, one for each data direction:
+Osborne RS232#2 to Tektronix#7
+Osborne RS232#3 to Tektronix#1
+I grounded the shield at the Osborne One end but not at the other. The Osborne screen
+loses vertican sync when I connect grounds to the tektronix, whether to frame or signal
+ground.

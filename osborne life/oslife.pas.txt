@@ -1,0 +1,354 @@
+program life;
+{$c+} {control characters}
+{$u+} {user interrupt}
+{$r+} {index range check}
+{$a+} {absolute code, no recursion}
+const
+    xmin = 1;              {minimum horizintal coordinate}
+    xmax = 96;            {maximum horizontal coordinate}
+    ymin = 1;              {minimum vertical coordinate}
+    ymax = 48;             {maximum vertical coordinate}
+    xstart = 48;           {center horizontal coordinate}
+    ystart = 25;           {center vertical coordinate}
+
+    sxmin = 1;
+    sxmax = 52;
+    symin = 1;
+    symax = 24;
+
+    larrow = #8;            {ascii of left arrow key}
+    darrow = #10;      {ascii down arrow key}
+    uarrow = #11;      {ascii up arrow key}
+    rarrow = #12;      {ascii right arrow key}
+    carret = #13;      {ascii carriage return key}
+    esc    = #27;      {ascii escape key}
+    space  = #32;      {ascii space bar}
+var
+  a : array[sxmin..sxmax,symin..symax] of byte;      {the living matrix}
+  grafix : string[16]; {pixel patterns to put in each screen locatiomn}
+
+  pop,births,deaths,gen : integer;            {vital statistics}
+  i,j : byte;
+
+  hadj : array[xmin..xmax,1..8] of byte;
+  vadj : array[ymin..ymax,1..8] of byte;
+
+procedure init;
+var
+    i,j : byte;
+begin
+    grafix := 'RTWFABQGNDEXZCV';
+    {zero out the life matrix}
+    for i := sxmin to sxmax do
+        for j := symin to symax do
+            a[i,j] := 0;
+    {set up horizontal adjacencies}
+    for i := xmin to xmax do begin
+        hadj[i,1]:=i-1;   {       } { positions }
+        hadj[i,2]:=i;     { 1 2 3 } { relative to }
+        hadj[i,3]:=i+1;   {       } { current }
+        hadj[i,4]:=i+1;   { 8 * 4 } { location }
+        hadj[i,5]:=i+1;   {       } { (*) }
+        hadj[i,6]:=i;     { 7 6 5 }
+        hadj[i,7]:=i-1;   {       }
+        hadj[i,8]:=i-1;
+        end;
+    hadj[xmax,3]:=xmin;
+    hadj[xmax,4]:=xmin;
+    hadj[xmax,5]:=xmin;
+    hadj[xmin,1]:=xmax;
+    hadj[xmin,8]:=xmax;
+    hadj[xmin,7]:=xmax;
+
+    {vertical adjacencies}
+    for j := ymin to ymax do begin
+        vadj[j,1]:=j-1;
+        vadj[j,2]:=j-1;
+        vadj[j,3]:=j-1;
+        vadj[j,4]:=j;
+        vadj[j,5]:=j+1;
+        vadj[j,6]:=j+1;
+        vadj[j,7]:=j+1;
+        vadj[j,8]:=j;
+        end;
+    vadj[ymin,1]:=ymax;
+    vadj[ymin,2]:=ymax;
+    vadj[ymin,3]:=ymax;
+    vadj[ymax,5]:=ymin;
+    vadj[ymax,6]:=ymin;
+    vadj[ymax,7]:=ymin;
+
+    gen := 1;
+    pop := 0;
+    births := 0;
+    deaths := 0;
+    clrscr;
+    write (#27,'g'); {start graphics}
+end; {init}
+
+procedure setxyl(px,py:byte);
+{set the corect bit in memory to 1}
+var
+    sx,sy : byte;
+    xcor,ycor : byte;
+    bitnum,pixbit : byte;
+begin
+    sx := (px + 1) div 2;
+    xcor := (px div 2) - sx + 1;   {0 for top half, 1 for bottom half}
+    sy := (py + 1) div 2;
+    ycor := (py div 2) - sy + 1;   {0 for left half, 1 for right half}
+    bitnum := xcor + (ycor shl 1); {the number of left shifts}
+    pixbit := 1 shl bitnum;        {the bit pattern for that pixel}
+    a[sx,sy] := a[sx,sy] or pixbit; {set the bit in memory}
+    end; {setxyl}
+
+procedure resetxyl(px,py:byte);
+{set the corect bit in memory to 0}
+var
+    sx,sy : byte;
+    xcor,ycor : byte;
+    bitnum,pixbit : byte;
+begin
+    sx := (px + 1) div 2;
+    xcor := (px div 2) - sx + 1;   {0 for top half, 1 for bottom half}
+    sy := (py + 1) div 2;
+    ycor := (py div 2) - sy + 1;   {0 for left half, 1 for right half}
+    bitnum := xcor + (ycor shl 1); {the number of left shifts}
+    pixbit := 1 shl bitnum;        {the bit pattern for that pixel}
+    a[sx,sy] := a[sx,sy] and not pixbit; {set the bit in memory}
+    end; {setxyl}
+
+procedure writexyl(px,py:byte);
+{display on screen the specific pixel}
+{(and three pixels from same screen location)}
+var
+    pix,sx,sy : byte;
+begin
+    sx := (px + 1) div 2;
+    sy := (py + 1) div 2;
+    {write grafix characters as control characters}
+    gotoxy(sx,sy);
+    pix := a[sx,sy] and $0f;
+    if pix = 0
+    then write (#27,'G ',#27,'g')
+    else write ( char( ord(grafix[pix]) and $1f));
+    end; {writexyl}
+
+function peekl(px,py:byte):boolean;
+{find out whether the pixel was set}
+{peekl access the life matrix as if it were:
+{ peekl : array [xmin..xmax,ymin..ymax] of boolean}
+var
+    sx,sy : byte;
+    xcor,ycor : byte;
+    bitnum,pixbit : byte;
+begin
+    sx := (px + 1) div 2;
+    xcor := (px div 2) - sx + 1;   {0 for top half, 1 for bottom half}
+    sy := (py + 1) div 2;
+    ycor := (py div 2) - sy + 1;   {0 for left half, 1 for right half}
+    bitnum := xcor + (ycor shl 1); {the number of left shifts}
+    pixbit := 1 shl bitnum;        {the bit pattern for that pixel}
+    peekl := (a[sx,sy] and pixbit) = pixbit;
+    end; {peekl}
+
+procedure entry; {arrow-key-directed input editor}
+var
+    xpos,ypos : byte;
+    lxpos,lypos : byte;
+    pix,lpix : boolean;
+    inc : char;
+
+    procedure up;
+    begin
+        ypos := ypos - 1;
+        if ypos < ymin
+        then ypos := ymax;
+        end;
+    procedure down;
+    begin
+        ypos := ypos + 1;
+        if ypos > ymax
+        then ypos := ymin;
+        end;
+    procedure left;
+    begin
+        xpos := xpos - 1;
+        if xpos < xmin
+        then xpos := xmax;
+        end;
+    procedure right;
+    begin
+        xpos := xpos + 1;
+        if xpos > xmax
+        then xpos := xmin;
+        end;
+    procedure center;
+    begin
+        xpos := xstart;                        {initialize cursor position}
+        ypos := ystart;
+        end;
+begin {entry}
+    center;
+    pix := peekl(xpos,ypos);
+    lpix := pix;
+    setxyl(xpos,ypos);                  {center cursor}
+    writexyl(xpos,ypos);
+    lxpos := xpos;
+    lypos := ypos;
+    read(kbd,inc);                     {read initial input character}
+    while inc <> esc do begin
+        case inc of
+            carret : lpix := true;
+            space  : begin
+                          resetxyl(xpos,ypos);
+                          lpix := false;
+                          end;
+            uarrow : up;
+            darrow : down;
+            larrow : left;
+            rarrow : right;
+            '8'    : up;
+            '7'    : begin
+                          up;
+                          left;
+                          end;
+            '4'    : left;
+            '1'    : begin
+                          down;
+                          left;
+                          end;
+            '2'    : down;
+            '3'    : begin
+                          down;
+                          right;
+                          end;
+            '6'    : right;
+            '9'    : begin
+                          up;
+                          right;
+                          end;
+            '0'    : begin                          resetxyl(xpos,ypos);
+                          resetxyl(xpos,ypos);
+                          lpix := false;
+                          end;
+            '5'    : center;
+            '+'    : center;
+            end;
+
+        pix := peekl(xpos,ypos);       {remember state of that pixel}
+        setxyl(xpos,ypos);             {set it to 1 for display}
+        writexyl(xpos,ypos);           {and diplay it}
+        if lpix                       {if old position was 1}
+        then setxyl(lxpos,lypos)       {then set to 1}
+        else resetxyl(lxpos,lypos);    {else set to 0}
+        writexyl(lxpos,lypos);
+        lpix := pix;                  {old pix gets current pix}
+        lxpos := xpos;                {old x,y gets current xy}
+        lypos := ypos;
+
+        read(kbd,inc);                {get next input character}
+        end; {while}
+    end; {entry}
+
+function adj(px,py:byte):byte;
+{returns the number fo live cells adjacent to this cell.}
+var
+    i,k : byte;
+begin
+    k := 0;
+    for i := 1 to 8 do
+        if peekl(hadj[px,i],vadj[py,i])
+        then k := k + 1;
+    adj := k;
+    end; {adj}
+
+procedure newgen; {updates life matrix}
+var
+    i,j,k : integer;
+
+procedure setxyh(px,py:byte);
+{change the corect bit in memory}
+var
+    sx,sy : byte;
+    xcor,ycor : byte;
+    one,bitnum,pixbit : byte;
+begin
+    sx := (px + 1) div 2;
+    xcor := (px div 2) - sx + 1;   {0 for top half, 1 for bottom half}
+    sy := (py + 1) div 2;
+    ycor := (py div 2) - sy + 1;   {0 for left half, 1 for right half}
+    bitnum := xcor + (ycor shl 1); {the number of left shifts}
+    pixbit := $10 shl bitnum;      {the bit pattern for that pixel}
+    a[sx,sy] := a[sx,sy] or pixbit;
+    end; {resetxyh}
+
+begin
+    gen:=gen+1;
+    deaths:=0;
+    births:=0;
+    for j := ymin to ymax do
+        for i := xmin to xmax do
+            {if the cell is alive, then test its neighbors}
+            if peekl(i,j) then
+                {if there aren't 2|3 live cells adjacent to a live cell}
+                if not((adj(i,j) = 2) or (adj(i,j) = 3))
+                then begin {that cell dies}
+                    pop := pop - 1;
+                    deaths := deaths + 1;
+                    setxyh(i,j);
+                    end
+            else {the cell isn't alive}
+                {if there are three live cells adjacent to a dead cell}
+                if (adj(i,j) = 3)
+                then begin {then that cell comes alive}
+                    pop := pop + 1;
+                    births := births + 1;
+                    setxyh(i,j);
+                    end;
+    end; {newgen}
+
+procedure redisplay;
+var
+    i,j,k : byte;
+
+function peekh(px,py:byte):boolean;
+{find out whether the pixel was set}
+{peekh access the life matrix as if it were:
+{ peekh : array [xmin..xmax,ymin..ymax] of boolean}
+var
+    sx,sy : byte;
+    xcor,ycor : byte;
+    bitnum,pixbit : byte;
+begin {peekh}
+    sx := (px + 1) div 2;
+    xcor := (px div 2) - sx + 1;   {0 for top half, 1 for bottom half}
+    sy := (py + 1) div 2;
+    ycor := (py div 2) - sy + 1;   {0 for left half, 1 for right half}
+    bitnum := xcor + (ycor shl 1); {the number of left shifts}
+    pixbit := $10 shl bitnum;  {the bit pattern for that pixel}
+    peekl := (a[sx,sy] and pixbit) = pixbit;
+    end; {peekh}
+
+begin {redisplay}
+    for j := ymin to ymax do
+        for i := xmin to xmax do
+            if peekh(i,j) {if a pixel should change}
+            then begin
+                if peekl(i,j) {if it is alive}
+                then resetxyl(i,j) {then kill it!}
+                else setxyl(i,j);    {else live it}
+                writexyl(i,j);       {display it}
+                end;
+    end; {redisplay}
+
+begin {life}
+    init;                   {initialize matrices}
+    entry;                  {enter life matrix}
+
+    repeat
+        newgen;             {calculate new situation}
+        redisplay;            {display new situation}
+        until (pop = 0) or (births+deaths=0);
+    write (#27,'G');       {end graphics}
+    end. {life}

@@ -1,0 +1,209 @@
+PROGRAM TEK;
+{$I-} {i/o is not checked for errors}
+{$U+} {no user interrupt from console}
+{$R-} {no index range checking}
+{$C+} {no <CTRL>-<C> }
+{$X+} {array optimization for speed}
+
+{experiments in communication to the tektronix 4010}
+{crosshair i/o}
+{the CP/M commands
+   stat pun:=ptp:
+   stat rdr:=ptr:
+attach the Tektronix 4010 to Turbo Pascal device AUX:}
+
+{Osborne One physical devices are assigned so:
+keyboard & screen = 00
+serial port       = 01
+parallel port     = 10
+IEEE-488 port     = 11}
+
+{IOBYTE set for use of the Tektronix 4010:
+  bit:7 6 5 4 3 2 1 0
+value:1 0 0 1 0 1 0 0 = $94
+      LST:PUN:RDR:CON:}
+
+const
+    xscale = 142.0;
+    yscale = 142.0;
+    xoff = 512;
+    yoff = 390;
+
+var
+    sind, cosd : array[0..360] of real;
+    c : char;
+    x,y : integer;
+    lastx,lasty : integer;
+
+procedure settrigs;
+{set up a table of trigonometric values for fast functions}
+var
+    i : integer;
+begin
+    writeln (aux,'Setting up trig tables; please wait.');
+    for i := 0 to 360 do begin
+        cosd[i] := cos(i * 0.017453293);
+        sind[i] := sin(i * 0.017453293);
+        end;
+    end;
+
+{graphic plotting information is sent to the 4010 in a 4 byte sequence
+containing High and Low order Y and High and Low order X. Each byte
+contains the two tag bits plus 5 binary bits.}
+
+procedure godraw(x,y:integer);
+{most primitive device draw routine:
+ not for use in main routine}
+var
+    hi_y,lo_y,hi_x,lo_x : byte;
+begin
+    hi_y := (y shr 5)   or $20;
+    lo_y := (y and $1F) or $60;
+    hi_x := (x shr 5)   or $20;
+    lo_x := (x and $1F) or $40;
+    write (aux,chr(hi_y),chr(lo_y),chr(hi_x),chr(lo_x));
+    end; {draw}
+
+procedure gomove(x,y:integer);
+{primitive device move routine:
+ not for use in main routine}
+begin
+    write (aux,#29); {make next drawn vector dark}
+    godraw(x,y);
+    end; {move}
+
+procedure draw(x,y:integer);
+{draw a line form the last point to the specified point in device space}
+begin
+    gomove (lastx,lasty);
+    godraw (x,y);
+    lastx := x;
+    lasty := y;
+    end;
+
+procedure move(x,y:integer);
+{move to a new device space coordinate}
+begin
+    lastx := x;
+    lasty := y;
+    end;
+
+procedure point(x,y:integer);
+{draw a point in device space}
+begin
+    lastx := x;
+    lasty := y;
+    gomove (x,y);
+    godraw (x,y);
+    end;
+
+procedure box(x1,y1,x2,y2 : integer);
+{draw an orthogonal rectangle between the device space coordinates}
+begin
+    move (x1,y1);
+    draw (x1,y2);
+    draw (x2,y2);
+    draw (x2,y1);
+    draw (x1,y1);
+    lastx := x1;
+    lasty := y1;
+    end;
+
+procedure circle (xc,yc,xr,yr : integer);
+{draw a circle in device space
+ xc,yc is the center;
+ xr,yr is any point on the rim}
+var
+    i : integer;
+    deltax,deltay,radius : real;
+begin
+    deltax := int(xc - xr);
+    deltay := int(yc - yr);
+    radius := sqrt(sqr(deltax) + sqr(deltay));
+    move (xc+round(radius) , yc);
+    i := 0;
+    repeat
+        draw (round(radius*cosd[i])+xc , round(radius*sind[i])+yc) ;
+        i := i + 10;
+        until i > 360;
+    lastx := xc;
+    lasty := yc;
+    end; {circle}
+
+procedure ellipse (x1,y1,x2,y2 : integer);
+{(x1,y1) and (x2,y2) are opposite corners of a rectangle containing the ellipse}
+var
+    i,xc,yc,rx,ry : integer;
+begin
+    xc := (x1 + x2) div 2;
+    yc := (y1 + y2) div 2;
+    rx := abs (x1 - xc);
+    ry := abs (y1 - yc);
+    move (xc+round(rx) , yc);
+    i := 0;
+    repeat
+        draw (round(rx*cosd[i])+xc , round(ry*sind[i])+yc);
+        i := i + 10;
+        until i > 360;
+    lastx := x1;
+    lasty := y1;
+    end; {ellipse}
+
+procedure getpoint (var key:char; var x,y:integer);
+var
+    inchar : array[1..6] of char;
+    k,l,xhi,xlo,yhi,ylo,stat : char;
+    i,j : byte;
+    phase_error : boolean;
+begin;
+    repeat
+        read (aux,k,l);  {two junk points it sends}
+        for i := 1 to 6 do   {clear input bytes of garbage}
+            inchar[i] := #0;
+        write (aux,#27,#26); {set up crosshairs}
+        for i := 1 to 6 do
+            read (aux,inchar[i]); {read six bytes sent by 4010}
+        if (ord(inchar[6]) <> 141) {last byte must be <return>+$8F}
+        then begin
+            phase_error := true;
+            writeln (#7,'Bad point from graphics terminal: try again.');
+            repeat
+                read (aux,k)
+                until k = #141;
+            end
+        else phase_error := false;
+            until not phase_error;
+    key := chr(ord(inchar[1]) and $7F);
+    x := ((ord(inchar[2]) and $1F) shl 5) + (ord(inchar[3]) and $1F);
+    y := ((ord(inchar[4]) and $1F) shl 5) + (ord(inchar[5]) and $1F);
+    end;
+
+begin
+    mem[$0003] := $94; {set iobyte: con:=crt+kbd; aux=pun:+rdr:=ptp:+ptr:; lst:=lpt:}
+    write (aux,#27,#12);
+    delay (700);
+    settrigs;          {set up trigonometric tables}
+    writeln (aux,'M to move;');
+    writeln (aux,'D to draw a line;');
+    writeln (aux,'P to make a point;');
+    writeln (aux,'B to draw a box;');
+    writeln (aux,'C to draw a circle;');
+    writeln (aux,'E to draw an ellipse;');
+    writeln (aux,'N to clear the screen.');
+
+    repeat
+        getpoint (c,x,y);
+        case c of
+            'M' : move (x,y);
+            'D' : draw (x,y);
+            'P' : point (x,y);
+            'B' : box (lastx,lasty,x,y);
+            'C' : circle (lastx,lasty,x,y);
+            'E' : ellipse (lastx,lasty,x,y);
+            'N' : begin;
+                  write (aux,#27,#12);
+                  delay (700);
+                  end;
+            end;
+        until c = ' ';
+    end. {tek}

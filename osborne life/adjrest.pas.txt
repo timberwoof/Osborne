@@ -1,0 +1,80 @@
+{set up initial adjancy count}
+  FOR J := ymin TO ymax do
+    FOR I := xmin TO xmax do
+    begin
+      if a[i,j] = '*' then
+        begin
+          POP := POP + 1;
+          for k := 1 to 8 do
+              ADJ[Vadj[J,k],Hadj[I,k]] := ADJ[Vadj[J,k],Hadj[I,k]]+1;
+        end;
+    end;
+
+    {set up initial vital statistics}
+    BIRTHS := POP;
+    adj1 := adj;
+
+end; {entry}
+
+procedure display; {display current state of life on vdt}
+var
+  i,j,k : integer;
+begin
+  FOR J := ymin TO ymax do
+    for i := xmin to xmax do
+      begin
+        gotoxy(i,j);
+        write(a[i,j]);
+          end;
+
+  {display vital statistics}
+  gotoxy(7,1); write(gen:5);
+  gotoxy(18,1); write(pop:5);
+  gotoxy(31,1); write(births:5);
+  gotoxy(44,1); write(deaths:5);
+
+  if pop = 0 then
+    begin
+      gotoxy(44,0);
+      write('all');
+    end;
+
+  if births+deaths = 0 then
+    begin
+      gotoxy(44,0);
+      write('none  ');
+    end;
+end; {display}
+
+procedure newgen; {updates life matrix}
+var
+  i,j,k : integer;
+begin
+  GEN:=GEN+1;
+  DEATHS:=0;
+  BIRTHS:=0;
+  FOR J := ymin TO ymax do
+      FOR I := xmin TO xmax do
+          if a[i,j] <> ' ' then begin
+              {if there aren't 2|3 live cells adjacent to a live cell}
+              IF not((ADJ1[J,I] = 2) OR (ADJ1[J,I] = 3)) THEN begin
+                  {then that cell dies}
+                  POP := POP - 1;
+                  DEATHS := DEATHS + 1;
+                  a[i,j] := ' ';
+                  for k := 1 to 8 do {update adjacencies}
+                      ADJ[Vadj[J,k],Hadj[I,k]] := ADJ[Vadj[J,k],Hadj[I,k]]-1;
+                  end;
+              end
+          else
+          IF (ADJ1[J,I] = 3) THEN begin
+              {if there are three live cells adjacent to a dead cell}
+              {then that cell comes alive}
+              POP := POP + 1;
+              births := births + 1;
+              a[i,j] := '*';
+              for k := 1 to 8 do {update adacencies}
+                  ADJ[Vadj[J,k],Hadj[I,k]] := ADJ[Vadj[J,k],Hadj[I,k]]+1;
+          end;
+      adj1 := adj;
+  end;

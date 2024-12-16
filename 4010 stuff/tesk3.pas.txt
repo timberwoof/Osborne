@@ -1,0 +1,79 @@
+PROGRAM TEK;
+{$I+}
+{$U+}
+
+const
+    xscale = 142.0;
+    yscale = 142.0;
+    xoff = 512;
+    yoff = 390;
+
+var
+    c : char;
+    i,z,x,y : integer;
+    lastx,lasty : integer;
+    gridx,gridy : integer;
+
+
+{graphic plotting information is sent to the 4010 in a 4 byte sequence
+containing High and Low order Y and High and Low order X. Each byte
+contains the two tag bits plus 5 binary bits.}
+
+procedure godraw(x,y:integer);
+var
+    hi_y,lo_y,hi_x,lo_x : byte;
+begin
+    hi_y := (y shr 5)   or $20;
+    lo_y := (y and $1F) or $60;
+    hi_x := (x shr 5)   or $20;
+    lo_x := (x and $1F) or $40;
+    write (aux,chr(hi_y),chr(lo_y),chr(hi_x),chr(lo_x));
+    end; {draw}
+
+procedure gomove(x,y:integer);
+begin
+    write (aux,#29); {make next drawn vector dark}
+    godraw(x,y);
+    end; {move}
+
+procedure draw(x,y:integer);
+begin
+    gomove (lastx,lasty);
+    godraw (x,y);
+    lastx := x;
+    lasty := y;
+    end;
+
+procedure move(x,y:integer);
+begin
+    lastx := x;
+    lasty := y;
+    end;
+
+procedure point(x,y:integer);
+begin
+    lastx := x;
+    lasty := y;
+    gomove (x,y);
+    godraw (x,y);
+    end;
+
+begin
+    mem[$0003] := $94; {set iobyte}
+    repeat
+        write (aux,#27,#12);
+        delay (500);
+        gridx := random(100);
+        gridy := random(100);
+        lastx := 0;
+        lasty := 0;
+        i := 1;
+        z := random(200);
+        for i := 1 to z do begin
+            x := random(gridx) * (1024 div gridx);
+            draw(x,y);
+            y := random(gridy) * (760 div gridy);
+            draw(x,y);
+            end;
+        until c = ' ';
+    end. {tek}
